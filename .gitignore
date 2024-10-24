@@ -1,0 +1,63 @@
+# Go specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Output directories
+bin/
+pkg/
+
+# Go workspace file
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# IDE specific files
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Operating System
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+## Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Application specific
+tmp/
+logs/
+*.log
+data/*.csv
+!data/sample.csv    # Exclude sample data file if you plan to include one
+
+# Test coverage
+coverage.txt
+coverage.html
+
+# Debug files
+debug/
+__debug_bin
