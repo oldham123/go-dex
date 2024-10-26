@@ -1,0 +1,24 @@
+{
+    "go.useLanguageServer": true,
+    "go.toolsManagement.autoUpdate": true,
+    "go.formatTool": "goimports",
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        },
+        "editor.suggest.snippetsPreventQuickSuggestions": false
+    },
+    "gopls": {
+        "ui.semanticTokens": true,
+        "ui.completion.usePlaceholders": true,
+        "ui.diagnostic.staticcheck": true,
+        "formatting.gofumpt": true,
+        "analyses": {
+            "unusedvariable": true,
+            "fieldalignment": true,
+            "staticcheck": true,
+        }
+    },
+    "go.lintOnSave": "workspace",
+}
