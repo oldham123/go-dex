@@ -6,29 +6,32 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strconv"
 )
 
 // Pokemon represents a single row from our CSV data
 type Pokemon struct {
-	Identifier     string `json:"identifier"`
-	Id             uint   `json:"id"`
-	SpeciesId      uint   `json:"species_id"`
-	Height         uint   `json:"height"`
-	Weight         uint   `json:"weight"`
-	BaseExperience uint   `json:"base_experience"`
-	Order          uint   `json:"order"`
-	IsDefault      bool   `json:"is_default"`
+	Identifier     string `csv:"identifier"`
+	Id             uint   `csv:"id"`
+	SpeciesId      uint   `csv:"species_id"`
+	Height         uint   `csv:"height"`
+	Weight         uint   `csv:"weight"`
+	BaseExperience uint   `csv:"base_experience"`
+	Order          uint   `csv:"order"`
+	IsDefault      bool   `csv:"is_default"`
 }
 
 // Store handles the loaded Pokemon data
 type Store struct {
-	pokemon map[uint]*Pokemon
+	pokemon   map[uint]*Pokemon
+	validator *HeaderValidator
 }
 
 func NewStore() *Store {
 	return &Store{
-		pokemon: make(map[uint]*Pokemon),
+		pokemon:   make(map[uint]*Pokemon),
+		validator: &HeaderValidator{RequireExact: true},
 	}
 }
 
@@ -42,14 +45,24 @@ func (s *Store) LoadFromCSV(filename string) error {
 
 	reader := csv.NewReader(file)
 
-	// Read and validate headers
+	// Read headers
 	headers, err := reader.Read()
 	if err != nil {
 		return fmt.Errorf("reading CSV headers: %w", err)
 	}
-	if err := validateHeaders(headers); err != nil {
+
+	// Validate headers using our new validator
+	if err := s.validator.ValidateHeaders(headers, reflect.TypeOf(Pokemon{})); err != nil {
 		return fmt.Errorf("validating CSV headers: %w", err)
 	}
+
+	// Get header positions for efficient record parsing
+	positions, err := s.validator.GetHeaderPositions(headers, reflect.TypeOf(Pokemon{}))
+	if err != nil {
+		return fmt.Errorf("getting header positions: %w", err)
+	}
+
+	parser := &CSVParser{}
 
 	// Read data rows
 	for {
@@ -61,87 +74,69 @@ func (s *Store) LoadFromCSV(filename string) error {
 			return fmt.Errorf("reading CSV record: %w", err)
 		}
 
-		pokemon, err := parsePokemonRecord(record)
+		// pokemon, err := parsePokemonRecord(record, positions)
+		// if err != nil {
+		// 	return fmt.Errorf("parsing Pokemon record: %w", err)
+		// }
+
+		result, err := parser.ParseRecord(record, positions, reflect.TypeOf(Pokemon{}))
 		if err != nil {
-			return fmt.Errorf("parsing Pokemon record: %w", err)
+			panic(err)
 		}
 
-		s.pokemon[pokemon.Id] = pokemon
+		pokemon := result.(Pokemon)
+
+		s.pokemon[pokemon.Id] = &pokemon
 	}
 
 	return nil
 }
 
-// validateHeaders checks if the CSV has the expected column structure
-func validateHeaders(headers []string) error {
-	expected := []string{
-		"id",
-		"identifier",
-		"species_id",
-		"height",
-		"weight",
-		"base_experience",
-		"order",
-		"is_default",
+// parsePokemonRecord converts a CSV record into a Pokemon struct using header positions
+func parsePokemonRecord(record []string, positions map[string]int) (*Pokemon, error) {
+	if len(record) < len(positions) {
+		return nil, fmt.Errorf("invalid record length: expected at least %d, got %d", len(positions), len(record))
 	}
 
-	if len(headers) != len(expected) {
-		return fmt.Errorf("expected %d columns, got %d", len(expected), len(headers))
-	}
-
-	for i, header := range headers {
-		if header != expected[i] {
-			return fmt.Errorf("expected column %d to be %s, got %s", i, expected[i], header)
-		}
-	}
-	return nil
-}
-
-// parsePokemonRecord converts a CSV record into a Pokemon struct
-func parsePokemonRecord(record []string) (*Pokemon, error) {
-	if len(record) != 8 {
-		return nil, fmt.Errorf("invalid record length: expected 8, got %d", len(record))
-	}
-
-	// Parse unsigned integer values
-	id, err := parseUint(record[0], "ID")
+	// Parse unsigned integer values using positions map
+	id, err := parseUint(record[positions["id"]], "id")
 	if err != nil {
 		return nil, err
 	}
 
-	speciesID, err := parseUint(record[2], "species_id")
+	speciesID, err := parseUint(record[positions["species_id"]], "species_id")
 	if err != nil {
 		return nil, err
 	}
 
-	height, err := parseUint(record[3], "height")
+	height, err := parseUint(record[positions["height"]], "height")
 	if err != nil {
 		return nil, err
 	}
 
-	weight, err := parseUint(record[4], "weight")
+	weight, err := parseUint(record[positions["weight"]], "weight")
 	if err != nil {
 		return nil, err
 	}
 
-	baseExp, err := parseUint(record[5], "base_experience")
+	baseExp, err := parseUint(record[positions["base_experience"]], "base_experience")
 	if err != nil {
 		return nil, err
 	}
 
-	order, err := parseUint(record[6], "order")
+	order, err := parseUint(record[positions["order"]], "order")
 	if err != nil {
 		return nil, err
 	}
 
-	isDefault, err := strconv.ParseBool(record[7])
+	isDefault, err := strconv.ParseBool(record[positions["is_default"]])
 	if err != nil {
 		return nil, fmt.Errorf("parsing is_default: %w", err)
 	}
 
 	return &Pokemon{
 		Id:             id,
-		Identifier:     record[1],
+		Identifier:     record[positions["identifier"]],
 		SpeciesId:      speciesID,
 		Height:         height,
 		Weight:         weight,
@@ -159,8 +154,6 @@ func parseUint(s string, field string) (uint, error) {
 	}
 	return uint(val), nil
 }
-
-// Access methods for the API
 
 // GetByID returns a Pokemon by its ID
 func (s *Store) GetByID(id uint) (*Pokemon, error) {

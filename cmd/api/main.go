@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/oldham123/go-dex/internal/storage/csv"
 )
@@ -15,8 +17,20 @@ func main() {
 	// Initialize store
 	store := csv.NewStore()
 
+	// Get the directory containing main.go
+	executableDir, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Navigate up two levels (from cmd/api to project root)
+	projectRoot := filepath.Join(executableDir, "..", "..")
+
+	// Construct path relative to project root
+	csvPath := filepath.Join(projectRoot, "data", "pokemon.csv")
+
 	// Load data - using relative path from where the binary runs
-	if err := store.LoadFromCSV("data/pokemon.csv"); err != nil {
+	if err := store.LoadFromCSV(csvPath); err != nil {
 		log.Fatalf("Failed to load Pokemon data: %v", err)
 	}
 
