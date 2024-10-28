@@ -8,19 +8,11 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+
+	"github.com/oldham123/go-dex/internal/models"
 )
 
-// Pokemon represents a single row from our CSV data
-type Pokemon struct {
-	Identifier     string `csv:"identifier"`
-	Id             uint   `csv:"id"`
-	SpeciesId      uint   `csv:"species_id"`
-	Height         uint   `csv:"height"`
-	Weight         uint   `csv:"weight"`
-	BaseExperience uint   `csv:"base_experience"`
-	Order          uint   `csv:"order"`
-	IsDefault      bool   `csv:"is_default"`
-}
+type Pokemon = models.Pokemon
 
 // Store handles the loaded Pokemon data
 type Store struct {
