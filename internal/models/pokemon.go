@@ -10,3 +10,8 @@ type Pokemon struct {
 	Order          uint   `csv:"order"`
 	IsDefault      bool   `csv:"is_default"`
 }
+
+// Implement the Model interface
+func (pokemon *Pokemon) GetID() uint {
+	return pokemon.Id
+}

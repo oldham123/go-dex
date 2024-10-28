@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/oldham123/go-dex/internal/models"
 	"github.com/oldham123/go-dex/internal/storage/csv"
 )
 
@@ -15,7 +16,7 @@ func main() {
 	log.Printf("Starting PokeDex API server...")
 
 	// Initialize store
-	store := csv.NewStore()
+	store := csv.NewStore[*models.Pokemon]()
 
 	// Get the directory containing main.go
 	executableDir, err := os.Getwd()
