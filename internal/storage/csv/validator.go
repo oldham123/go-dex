@@ -83,10 +83,6 @@ func (v *HeaderValidator) ValidateHeaders(headers []string, structType reflect.T
 
 // getExpectedHeaders extracts CSV header names from struct tags
 func (v *HeaderValidator) getExpectedHeaders(structType reflect.Type) []string {
-	if structType.Kind() == reflect.Ptr {
-		structType = structType.Elem()
-	}
-
 	var headers []string
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)

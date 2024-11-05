@@ -15,13 +15,25 @@ type Model interface {
 	GetID() uint
 }
 
-// Store is a generic store for any model type
-type Store[T Model] struct {
+// Ensure T is a struct type that implements Model
+type structModel interface {
+	Model
+	comparable
+}
+
+// Store is a generic store for struct types implementing Model
+type Store[T structModel] struct {
 	items     map[uint]T
 	validator *HeaderValidator
 }
 
-func NewStore[T Model]() *Store[T] {
+func NewStore[T structModel]() *Store[T] {
+	// Compile-time validation that T is a struct type
+	var zero T
+	if reflect.TypeOf(zero).Kind() != reflect.Struct {
+		panic("NewStore: type parameter T must be a struct type")
+	}
+
 	return &Store[T]{
 		items:     make(map[uint]T),
 		validator: &HeaderValidator{RequireExact: true},
@@ -37,34 +49,26 @@ func (s *Store[T]) LoadFromCSV(filename string) error {
 
 	reader := csv.NewReader(file)
 
-	// Read headers
+	// Read first row of data to get headers
 	headers, err := reader.Read()
 	if err != nil {
 		return fmt.Errorf("reading CSV headers: %w", err)
 	}
 
-	// Create a zero value of T to get its type
-	var zero T
-	modelType := reflect.TypeOf(zero)
-	if modelType.Kind() == reflect.Ptr {
-		modelType = modelType.Elem()
-	}
+	// Get type information once at the start
+	modelType := reflect.TypeOf(*new(T))
 
-	// Validate headers using our validator
 	if err := s.validator.ValidateHeaders(headers, modelType); err != nil {
 		return fmt.Errorf("validating CSV headers: %w", err)
 	}
 
-	// Get header positions for efficient record parsing
 	positions, err := s.validator.GetHeaderPositions(headers, modelType)
 	if err != nil {
 		return fmt.Errorf("getting header positions: %w", err)
 	}
 
-	// Create parser
 	parser := &CSVParser{}
 
-	// Read data rows
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -74,31 +78,14 @@ func (s *Store[T]) LoadFromCSV(filename string) error {
 			return fmt.Errorf("reading CSV record: %w", err)
 		}
 
-		// Parse the record into our model type
-		result, err := parser.ParseRecord(record, positions, modelType)
+		item, err := parser.ParseRecord(record, positions, modelType)
 		if err != nil {
 			return fmt.Errorf("parsing record: %w", err)
 		}
 
-		// Convert the result to our generic type T
-		var item T
-		switch v := result.(type) {
-		case T:
-			item = v
-		default:
-			// If result is a struct but we need a pointer
-			if reflect.TypeOf(zero).Kind() == reflect.Ptr {
-				// Create a new pointer to the result
-				ptr := reflect.New(reflect.TypeOf(result))
-				ptr.Elem().Set(reflect.ValueOf(result))
-				item = ptr.Interface().(T)
-			} else {
-				return fmt.Errorf("unexpected type: got %T, want %T", result, zero)
-			}
-		}
-
-		// Store the item using its ID
-		s.items[item.GetID()] = item
+		// We know this must succeed because of our type constraints
+		typed := item.(T)
+		s.items[typed.GetID()] = typed
 	}
 
 	return nil
@@ -108,19 +95,20 @@ func (s *Store[T]) GetByID(id uint) (T, error) {
 	if item, ok := s.items[id]; ok {
 		return item, nil
 	}
-	var zero T
-	return zero, fmt.Errorf("item with ID %d not found", id)
+	return *new(T), fmt.Errorf("item with ID %d not found", id)
 }
 
 func (s *Store[T]) List() []T {
-	result := make([]T, 0, len(s.items))
+	result := make([]T, len(s.items))
+	i := 0
 	for _, item := range s.items {
-		result = append(result, item)
+		result[i] = item
+		i++
 	}
 	return result
 }
 
-// Search returns Pokemon matching the given criteria
+// Search returns instances matching the given criteria
 func (s *Store[T]) Search(criteria func(T) bool) []T {
 	var results []T
 	for _, item := range s.items {

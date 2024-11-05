@@ -29,48 +29,62 @@ func (e *ParseError) Error() string {
 
 // ParseRecord parses a CSV record into a new instance of the given type
 func (p *CSVParser) ParseRecord(record []string, positions map[string]int, targetType reflect.Type) (interface{}, error) {
-	if targetType.Kind() == reflect.Ptr {
-		targetType = targetType.Elem()
-	}
-
-	// Create a new instance of the target type
+	// We know targetType is a struct type now, so we can remove the pointer check
 	result := reflect.New(targetType).Elem()
 
-	// Iterate through the struct fields
+	// Pre-calculate field mappings once
+	fields := make([]struct {
+		fieldTyp reflect.Type
+		name     string
+		index    int
+		csvPos   int
+	}, 0, targetType.NumField())
+
+	// Build field mapping
 	for i := 0; i < targetType.NumField(); i++ {
 		field := targetType.Field(i)
-
-		// Get the csv tag
-		csvTag := field.Tag.Get("csv")
-		if csvTag == "" {
-			continue // Skip fields without csv tag
-		}
-
-		// Find position in record
-		pos, exists := positions[csvTag]
-		if !exists {
-			continue // Skip if column wasn't in the CSV
-		}
-
-		// Get the value from the record
-		if pos >= len(record) {
-			return nil, fmt.Errorf("record too short, missing field %q", csvTag)
-		}
-		value := record[pos]
-
-		// Parse the value according to the field type
-		parsedValue, err := p.parseValue(value, field.Type, csvTag)
-		if err != nil {
-			return nil, &ParseError{
-				Field: csvTag,
-				Value: value,
-				Type:  field.Type.String(),
-				Err:   err,
+		if csvTag := field.Tag.Get("csv"); csvTag != "" {
+			if pos, exists := positions[csvTag]; exists {
+				fields = append(fields, struct {
+					fieldTyp reflect.Type
+					name     string
+					index    int
+					csvPos   int
+				}{field.Type, csvTag, i, pos})
 			}
 		}
+	}
 
-		// Set the field value
-		result.Field(i).Set(reflect.ValueOf(parsedValue))
+	// Validate record length once
+	maxPos := 0
+	for _, f := range fields {
+		if f.csvPos > maxPos {
+			maxPos = f.csvPos
+		}
+	}
+	if len(record) <= maxPos {
+		return nil, fmt.Errorf("record too short: got %d fields, need at least %d", len(record), maxPos+1)
+	}
+
+	// Parse all fields
+	var parseErr *ParseError
+	for _, f := range fields {
+		value := record[f.csvPos]
+		parsedValue, err := p.parseValue(value, f.fieldTyp, f.name)
+		if err != nil {
+			parseErr = &ParseError{
+				Field: f.name,
+				Value: value,
+				Type:  f.fieldTyp.String(),
+				Err:   err,
+			}
+			break
+		}
+		result.Field(f.index).Set(reflect.ValueOf(parsedValue))
+	}
+
+	if parseErr != nil {
+		return nil, parseErr
 	}
 
 	return result.Interface(), nil
